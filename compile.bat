@@ -1,0 +1,1 @@
+gcc -o torrent main.c sha1.c bencode.c tracker.c peer.c torrent.c utils.c -lws2_32
