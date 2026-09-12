@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "peer.h"
 #include "torrent.h"
+#include "netmanager.h"
 #pragma comment(lib, "ws2_32.lib")
 
 int main(int argc, char *argv[]) {
@@ -72,14 +73,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed\n");
-        free(bitfield);
-        free_bencode(torrent_meta);
-        free(file_buffer);
-        return 1;
-    }
+    init_networking();
 
     struct addrinfo hints;
     ZeroMemory(&hints, sizeof(hints));
