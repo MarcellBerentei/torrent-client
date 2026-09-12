@@ -16,15 +16,18 @@
 int main(int argc, char *argv[]) {
     srand((unsigned)time(NULL));
 
+    // Generating a unique peer ID for every session
     uint8_t peer_id[20];
     generate_peer_id(peer_id);
     printf("Your Client Peer ID: %.*s\n\n", 20, peer_id);
 
+    // I don't know what this means, but I wanted to try this out.
     const char *torrent_path = (argc > 1) ? argv[1] : "test.torrent";
     if (argc < 2) {
         printf("No torrent file was entered, using default.\n\n");
     }
 
+    // Opening the file, figureing out the size of it and then closeing the file.
     char *file_buffer = NULL;
     size_t file_size = 0;
     if (load_torrent_file(torrent_path, &file_buffer, &file_size) != 0) {
@@ -34,6 +37,7 @@ int main(int argc, char *argv[]) {
 
     printf("Size of the file read is: %zu bytes.\n\n", file_size);
 
+    // Parsing the torrent file into a Bencode structure
     Bencode *torrent_meta = parse_torrent_file(file_buffer);
     if (torrent_meta == NULL) {
         printf("Failed to parse Bencode\n\n");
@@ -43,10 +47,11 @@ int main(int argc, char *argv[]) {
 
     printf("Successfully parsed the torrent file!\n\n");
 
-    char **ip_names = NULL;
+    // Extracting the announce URLs from the torrent file. (From the announce-list, we skip the simple announce field)
+    char **hosts = NULL;
     char **ports = NULL;
     int accepted_count = 0;
-    if (extract_announce_urls(torrent_meta, &ip_names, &ports, &accepted_count) != 0) {
+    if (extract_announce_urls(torrent_meta, &hosts, &ports, &accepted_count) != 0) {
         printf("Failed to extract announce URLs\n\n");
         free_bencode(torrent_meta);
         free(file_buffer);
@@ -55,6 +60,7 @@ int main(int argc, char *argv[]) {
 
     printf("Successfully extracted announce URLs!\n\n");
 
+    // Computing the info hash of the torrent file
     uint8_t info_hash[20];
     if (compute_info_hash(torrent_meta, info_hash) != 0) {
         printf("Failed to compute torrent info hash\n\n");
@@ -63,6 +69,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Computing the size of the bitfield
     size_t bitfield_size = compute_bitfield_size(torrent_meta);
     uint8_t *bitfield = calloc(bitfield_size, 1);
     if (bitfield == NULL && bitfield_size > 0) {
@@ -72,6 +79,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Start of the WinSock2 nightmare...
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("WSAStartup failed\n");
@@ -81,30 +89,33 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Bunch of winsock2 boilerplate that should be unnecessary if we had a wrapper for this stuff.
     struct addrinfo hints;
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
 
+    // This talks to all the trackers and collects the peers from them.
     Peer *swarm = NULL;
     int swarm_count = 0;
-    if (collect_peers(NULL, &hints, info_hash, peer_id, accepted_count, ip_names, ports, &swarm, &swarm_count) != 0) {
+    if (collect_peers(NULL, &hints, info_hash, peer_id, accepted_count, hosts, ports, &swarm, &swarm_count) != 0) {
         printf("Failed to collect peers from trackers\n");
         free(bitfield);
         free_bencode(torrent_meta);
         free(file_buffer);
         for (int i = 0; i < accepted_count; i++) {
-            free(ip_names[i]);
+            free(hosts[i]);
             free(ports[i]);
         }
-        free(ip_names);
+        free(hosts);
         free(ports);
         WSACleanup();
         return 1;
     }
 
     // Winsock2 thingy
+    // I'm really not sure if this is the best way to do this, but it works for now. I might change this later.
     WSAPOLLFD socket_poll_array[swarm_count];
 
 
@@ -131,10 +142,10 @@ int main(int argc, char *argv[]) {
     free_bencode(torrent_meta);
     free(file_buffer);
     for (int i = 0; i < accepted_count; i++) {
-        free(ip_names[i]);
+        free(hosts[i]);
         free(ports[i]);
     }
-    free(ip_names);
+    free(hosts);
     free(ports);
     free(bitfield);
     WSACleanup();

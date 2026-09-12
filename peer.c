@@ -34,6 +34,7 @@ void mark_peer_dead(Peer *peer) {
     }
 }
 
+// Function to clean up the swarm and free resources
 void cleanup_swarm(Peer *swarm, int swarm_count) {
     if (swarm == NULL) {
         return;
@@ -67,6 +68,7 @@ static int ensure_message_buffer(Peer *peer, size_t desired_size) {
 }
 
 static int process_peer_handshake(Peer *peer, const uint8_t info_hash[20]) {
+    // Ensure the message buffer is large enough to hold the handshake
     int bytes_to_read = 68 - peer->bytes_received;
     int received = recv(peer->socket, (char *)peer->message_buffer + peer->bytes_received, bytes_to_read, 0);
     if (received > 0) {
@@ -75,6 +77,7 @@ static int process_peer_handshake(Peer *peer, const uint8_t info_hash[20]) {
             return 0;
         }
 
+        // Now we have the full handshake message, let's verify it
         HandshakeMessage response;
         memcpy(&response, peer->message_buffer, sizeof(response));
 
@@ -124,6 +127,7 @@ static int process_peer_message(Peer *peer) {
     }
 
     uint32_t total_bytes = length + 4;
+    // Ensure the message buffer is large enough to hold the entire message
     if (!ensure_message_buffer(peer, total_bytes)) {
         printf("Peer | failed to allocate message buffer (%u bytes)\n", total_bytes);
         mark_peer_dead(peer);
@@ -134,10 +138,13 @@ static int process_peer_message(Peer *peer) {
         return 0;
     }
 
+    // Process the message based on its ID
     uint8_t message_id = buffer[4];
+
+    // If the ID is 5 (bitfield), we need to handle it specially
     if (message_id == 5) {
-        uint32_t bitfield_length = length - 1;
-        if (peer->bitfield == NULL) {
+        uint32_t bitfield_length = length - 1; // Subtract 1 for the message ID byte
+        if (peer->bitfield == NULL) { // Allocate the bitfield buffer if it hasn't been allocated yet (What happens if the peer sends a new bitfield message?)
             peer->bitfield = calloc(bitfield_length, 1);
             if (peer->bitfield == NULL) {
                 printf("Peer | failed to allocate bitfield buffer\n");
@@ -146,10 +153,12 @@ static int process_peer_message(Peer *peer) {
             }
         }
 
+        // Copy the bitfield data from the message buffer to the peer's bitfield
         memcpy(peer->bitfield, &buffer[5], bitfield_length);
         peer->has_bitfield = 1;
         printf("Peer | full bitfield parsed (%u bytes)\n", bitfield_length);
 
+        // If the message buffer is larger than MAX_MESSAGE_BUFFER, we should shrink it back down to avoid excessive memory usage
         if (peer->message_buffer_size > MAX_MESSAGE_BUFFER) {
             uint8_t *normal_buffer = realloc(peer->message_buffer, MAX_MESSAGE_BUFFER);
             if (normal_buffer != NULL) {
@@ -158,6 +167,7 @@ static int process_peer_message(Peer *peer) {
             }
         }
 
+        // After receiving the bitfield, we can send an "interested" message to the peer if we haven't already
         if (!peer->sent_interested) {
             PeerMessage interested;
             interested.length = htonl(1);
@@ -173,13 +183,14 @@ static int process_peer_message(Peer *peer) {
             peer->sent_interested = 1;
             printf("Peer | sent interested message\n");
         }
-    } else if (message_id == 1) {
+    } else if (message_id == 1) { // Unchoke message
         printf("Peer | received unchoke message\n");
         peer->is_chocking = 0;
-    } else {
+    } else { // Other message types
         printf("Peer | received message id %u\n", message_id);
     }
 
+    // Shift the remaining data in the message buffer to the front
     if (peer->bytes_received > (int)total_bytes) {
         int remaining = peer->bytes_received - total_bytes;
         memmove(peer->message_buffer, peer->message_buffer + total_bytes, remaining);
@@ -192,8 +203,10 @@ static int process_peer_message(Peer *peer) {
 }
 
 static int receive_peer_data(Peer *peer) {
+    // Ensure there's enough space in the message buffer
     size_t available = peer->message_buffer_size - peer->bytes_received;
     if (available == 0) {
+        // Expand the buffer if it's full (This feels really dangerous, will need to make sure this doesn't cause issues)
         if (!ensure_message_buffer(peer, peer->message_buffer_size + MAX_MESSAGE_BUFFER)) {
             printf("Peer | unable to expand receive buffer\n");
             mark_peer_dead(peer);
@@ -202,18 +215,21 @@ static int receive_peer_data(Peer *peer) {
         available = peer->message_buffer_size - peer->bytes_received;
     }
 
+    // Receive data from the peer
     int bytes = recv(peer->socket, (char *)peer->message_buffer + peer->bytes_received, (int)available, 0);
     if (bytes > 0) {
         peer->bytes_received += bytes;
         return 1;
     }
 
+    // If recv returns 0, it means the peer has closed the connection
     if (bytes == 0) {
         printf("Peer | disconnected\n");
         mark_peer_dead(peer);
         return -1;
     }
 
+    // If recv returns SOCKET_ERROR, we need to check the error code
     int error = WSAGetLastError();
     if (error != WSAEWOULDBLOCK) {
         printf("Peer | recv() error: %d\n", error);
@@ -229,22 +245,26 @@ int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], con
         return 0;
     }
 
+    // Allocate an array of WSAPOLLFD structures for polling the swarm
     WSAPOLLFD *pollfds = calloc(swarm_count, sizeof(WSAPOLLFD));
     if (pollfds == NULL) {
         printf("Failed to allocate poll array\n");
         return -1;
     }
 
+    // Initialize the poll array with the swarm's sockets
     for (int i = 0; i < swarm_count; i++) {
         pollfds[i].fd = swarm[i].socket;
         pollfds[i].revents = 0;
         pollfds[i].events = POLLOUT;
     }
 
+    // Main loop to process the swarm
     int active_connections = 0;
     while (1) {
         active_connections = 0;
         for (int i = 0; i < swarm_count; i++) {
+            // Skip dead peers
             Peer *peer = &swarm[i];
             if (peer->is_dead || peer->socket == INVALID_SOCKET) {
                 pollfds[i].events = 0;
@@ -252,6 +272,8 @@ int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], con
             }
 
             active_connections++;
+            // If the peer is connecting, we want to check for writability (POLLOUT) to know when the connection is established.
+            // Otherwise, we check for readability (POLLIN) to receive data.
             pollfds[i].events = peer->is_connecting ? POLLOUT : POLLIN;
         }
 
@@ -259,29 +281,35 @@ int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], con
             break;
         }
 
+        // Poll the sockets with a timeout of 100 milliseconds
         int poll_result = WSAPoll(pollfds, swarm_count, 100);
         if (poll_result == SOCKET_ERROR) {
             printf("WSAPoll failed with error: %d\n", WSAGetLastError());
             break;
         }
 
+        // If no sockets are ready, continue to the next iteration
         if (poll_result == 0) {
             continue;
         }
 
+        // Process each peer based on the poll results
         for (int i = 0; i < swarm_count; i++) {
             Peer *peer = &swarm[i];
             if (peer->is_dead || pollfds[i].revents == 0) {
                 continue;
             }
 
+            // Handle errors and disconnections
             if (pollfds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
                 printf("Peer %d | disconnected or errored\n", i);
                 mark_peer_dead(peer);
                 continue;
             }
 
+            // If the peer is connecting and the socket is writable, the connection has been established.
             if (peer->is_connecting && (pollfds[i].revents & POLLOUT)) {
+                // Check for socket errors after connect
                 int socket_error = 0;
                 int opt_len = sizeof(socket_error);
                 getsockopt(peer->socket, SOL_SOCKET, SO_ERROR, (char *)&socket_error, &opt_len);
@@ -304,6 +332,7 @@ int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], con
                 }
             }
 
+            // If the peer is connected and the socket is readable, we can receive data.
             if (!peer->is_connecting && (pollfds[i].revents & POLLIN)) {
                 if (!peer->handshake_complete) {
                     int result = process_peer_handshake(peer, info_hash);
@@ -311,11 +340,13 @@ int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], con
                         continue;
                     }
                 } else {
+                    // Process regular peer messages
                     int recv_result = receive_peer_data(peer);
                     if (recv_result < 0) {
                         continue;
                     }
 
+                    // If we have enough data to process a message, do so
                     if (peer->bytes_received >= 4) {
                         int decode_result = process_peer_message(peer);
                         if (decode_result < 0) {

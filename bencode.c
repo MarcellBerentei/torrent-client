@@ -1,3 +1,5 @@
+// Recursive evil lies ahead, beware traveller, for few have returned from the depths of this code unscathed.
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

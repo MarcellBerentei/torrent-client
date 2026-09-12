@@ -1,3 +1,5 @@
+// Bunch of helper functions and stuff placed here so as to not clutter the main.c file.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

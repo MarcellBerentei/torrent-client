@@ -1,3 +1,6 @@
+// This thing was written by AI and is a complete engima to me.
+// Perhaps later it can be a project on its own, but for now it is just a sha1 implementation for the torrent client.
+
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>

@@ -1,3 +1,5 @@
+// This whole thing is a mess, someone needs to organize this code and make it more readable.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +19,7 @@ typedef struct {
     int is_resolved;
 } Tracker;
 
-int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[20], uint8_t peer_id[20], int accepted_count, char **ip_names, char **ports, Peer **swarm, int *swarm_count) {
+int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[20], uint8_t peer_id[20], int accepted_count, char **hosts, char **ports, Peer **swarm, int *swarm_count) {
     // Setting up UDP socket
     SOCKET TrackerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (TrackerSocket == INVALID_SOCKET) {
@@ -46,16 +48,16 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
 
 
     for (int i = 0; i < accepted_count; i++) {
-        int ws2_result = getaddrinfo(ip_names[i], ports[i], hints, &result);
+        int ws2_result = getaddrinfo(hosts[i], ports[i], hints, &result);
         if (ws2_result) {
             trackers[i].is_resolved = 0;
-            printf("Failed to resolve %s:%s: %d\n", ip_names[i], ports[i], ws2_result);
+            printf("Failed to resolve %s:%s: %d\n", hosts[i], ports[i], ws2_result);
             continue;
         } else {
             trackers[i].is_resolved = 1;
             trackers[i].addr_len = (int)result->ai_addrlen;
             memcpy(&trackers[i].addr, result->ai_addr, result->ai_addrlen);
-            printf("Successfully resolved %s:%s\n", ip_names[i], ports[i]);
+            printf("Successfully resolved %s:%s\n", hosts[i], ports[i]);
         }
 
         freeaddrinfo(result);
@@ -68,7 +70,7 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
     for (int i = 0; i < accepted_count; i++) {
         if (!trackers[i].is_resolved) continue;
 
-        printf("\n\n----------------------------------\n### %s:%s ###\n\n", ip_names[i], ports[i]);
+        printf("\n\n----------------------------------\n### %s:%s ###\n\n", hosts[i], ports[i]);
 
         // --- Sending --- //
         ConnectRequest request;
@@ -132,7 +134,7 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
 
         bytes_sent = sendto(TrackerSocket, (char*)&announce_request, sizeof(announce_request), 0, (struct sockaddr*)&trackers[i].addr, trackers[i].addr_len);
         if (bytes_sent == SOCKET_ERROR) {
-            printf("Failed to send announce-request to %s:%s | Error: %d\n", ip_names[i], ports[i], WSAGetLastError());
+            printf("Failed to send announce-request to %s:%s | Error: %d\n", hosts[i], ports[i], WSAGetLastError());
             continue;
         } else {
             printf("Successfully sent announce-request\n");
