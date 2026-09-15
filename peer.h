@@ -76,3 +76,29 @@ typedef struct {
 int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], const uint8_t peer_id[20]);
 void cleanup_swarm(Peer *swarm, int swarm_count);
 void mark_peer_dead(Peer *peer);
+
+
+
+
+typedef enum {
+    MSG_KEEPALIVE = -1,
+    MSG_CHOKE = 0,
+    MSG_UNCHOKE = 1,
+    MSG_INTERESTED = 2,
+    MSG_NOT_INTERESTED = 3,
+    MSG_HAVE = 4,
+    MSG_BITFIELD = 5,
+    MSG_REQUEST = 6,
+    MSG_PIECE = 7,
+    MSG_CANCEL = 8,
+    MSG_PORT = 9
+} PeerMessageType;
+
+
+// ctx is short for context. It can be used to pass any additional information needed by the handler, such as a pointer to the Peer structure or any other relevant data.
+typedef int (*PeerMessageHandler)(void *ctx, const uint8_t *payload, size_t payload_length);
+
+typedef struct {
+    PeerMessageType type;
+    PeerMessageHandler handler;
+} PeerMessageHandlerEntry;
