@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
     // Generating a unique peer ID for every session
     uint8_t peer_id[20];
     generate_peer_id(peer_id);
-    printf("Your Client Peer ID: %.*s\n\n", 20, peer_id);
+    //printf("Your Client Peer ID: %.*s\n\n", 20, peer_id);
 
     // I don't know what this means, but I wanted to try this out.
     const char *torrent_path = (argc > 1) ? argv[1] : "test.torrent";
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Size of the file read is: %zu bytes.\n\n", file_size);
+    //printf("Size of the file read is: %zu bytes.\n\n", file_size);
 
     // Parsing the torrent file into a Bencode structure
     Bencode *torrent_meta = parse_torrent_file(file_buffer);
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Successfully parsed the torrent file!\n\n");
+    //printf("Successfully parsed the torrent file!\n\n");
 
     // Extracting the announce URLs from the torrent file. (From the announce-list, we skip the simple announce field)
     char **hosts = NULL;
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Successfully extracted announce URLs!\n\n");
+    //printf("Successfully extracted announce URLs!\n\n");
 
     // Computing the info hash of the torrent file
     uint8_t info_hash[20];
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Bunch of winsock2 boilerplate that should be unnecessary if we had a wrapper for this stuff.
+    // Bunch of winsock2 boilerplate that should be hidden in a wrapper
     struct addrinfo hints;
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;

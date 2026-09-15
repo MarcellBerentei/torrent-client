@@ -34,7 +34,7 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
         return -1;
     }
 
-    DWORD timeout = 4000;
+    DWORD timeout = 2000;
     setsockopt(TrackerSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
 
     if (swarm == NULL || swarm_count == NULL) {
@@ -83,8 +83,6 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
         if (bytes_sent == SOCKET_ERROR) {
             printf("Failed to send connect request | Error: %d\n", WSAGetLastError());
             continue;
-        } else {
-            printf("Successfully sent connect request\n");
         }
 
         // --- Receiving --- //
@@ -111,7 +109,7 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
         }
 
         trackers[i].connection_id = response.connection_id;
-        printf("SUCCESS! Received connection ID | %llu\n\n", trackers[i].connection_id);
+        //printf("SUCCESS! Received connection ID | %llu\n\n", trackers[i].connection_id);
 
         // --- Sending Announce Request--- //
         AnnounceRequest announce_request;
@@ -136,8 +134,6 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
         if (bytes_sent == SOCKET_ERROR) {
             printf("Failed to send announce-request to %s:%s | Error: %d\n", hosts[i], ports[i], WSAGetLastError());
             continue;
-        } else {
-            printf("Successfully sent announce-request\n");
         }
 
         // --- Receiving Announce Response --- //
