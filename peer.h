@@ -102,3 +102,29 @@ typedef struct {
     PeerMessageType type;
     PeerMessageHandler handler;
 } PeerMessageHandlerEntry;
+
+
+typedef enum {
+    PEER_DISCONNECTED,
+    PEER_CONNECTING,
+    PEER_CONNECTED,
+    PEER_HANDSHAKING,
+    PEER_ESTABLISHED,
+    PEER_ERROR
+} PeerState;
+
+typedef struct {
+    int fd;
+    PeerState state;
+    uint8_t peer_id[20];
+    uint8_t info_hash[20];
+    uint8_t *bitfield;
+    size_t bitfield_length;
+    int am_choked;
+    int am_interested;
+    int peer_choked;
+    int peer_interested;
+    uint8_t *rx_buffer;
+    size_t rx_used;
+    size_t rx_capacity;
+} PeerConnection;
