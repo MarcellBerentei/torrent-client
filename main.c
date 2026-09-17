@@ -21,18 +21,10 @@ int main(int argc, char *argv[]) {
     PeerConnection *peers = {0};
 
     if (torrent_init(&torrent, torrent_path) != 0) return 1;
+    //if (tracker_collect_peers(&torrent, &peers) != 0) return 1;
+
 
     // From here, network.c should take over
-    // Extracting the announce URLs from the torrent file. (From the announce-list, we skip the simple announce field)
-    char **hosts = NULL;
-    char **ports = NULL;
-    int accepted_count = 0;
-    if (extract_announce_urls(torrent.torrent_meta, &hosts, &ports, &accepted_count) != 0) {
-        printf("Failed to extract announce URLs\n\n");
-        return 1;
-    }
-
-
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("WSAStartup failed\n");
@@ -50,15 +42,8 @@ int main(int argc, char *argv[]) {
     // This should be called from network.c
     Peer *swarm = NULL;
     int swarm_count = 0;
-    if (collect_peers(NULL, &hints, torrent.info_hash, torrent.peer_id, accepted_count, hosts, ports, &swarm, &swarm_count) != 0) {
+    if (collect_peers(NULL, &hints, torrent.info_hash, torrent.peer_id, torrent.number_of_active_trackers, torrent.hosts, torrent.ports, &swarm, &swarm_count) != 0) {
         printf("Failed to collect peers from trackers\n");
-        for (int i = 0; i < accepted_count; i++) {
-            free(hosts[i]);
-            free(ports[i]);
-        }
-        free(hosts);
-        free(ports);
-        WSACleanup();
         return 1;
     }
 

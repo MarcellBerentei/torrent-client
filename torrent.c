@@ -155,6 +155,12 @@ int torrent_init(Torrent *torrent, char *torrent_path) {
         return 1;
     }
 
+    // Extracting the announce URLs from the torrent file. (From the announce-list, we skip the simple announce field)
+    if (extract_announce_urls(torrent->torrent_meta, &torrent->hosts, &torrent->ports, &torrent->number_of_active_trackers) != 0) {
+        printf("Failed to extract announce URLs\n\n");
+        return 1;
+    }
+
 
     return 0;
 }

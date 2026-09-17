@@ -14,6 +14,9 @@ typedef struct {
     uint8_t *bitfield;
     char *torrent_path;
     char *file_buffer;
+    char **hosts;
+    char **ports;
+    int number_of_active_trackers;
     size_t file_size;    
     size_t bitfield_size;
     Bencode *torrent_meta;    
