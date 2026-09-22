@@ -1,6 +1,9 @@
 #pragma once
 
-typdef struct {
+#include <stdint.h>
+
+
+typedef struct {
     uint8_t *buffer;
     size_t length;
     size_t capacity;

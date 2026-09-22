@@ -19,72 +19,20 @@ int main(int argc, char *argv[]) {
     Torrent torrent = {0};
     char *torrent_path = (argc > 1) ? argv[1] : "test.torrent";
     PeerConnection *peers = {0};
+    int peer_count = 0;
 
     if (torrent_init(&torrent, torrent_path) != 0) return 1;
-    //if (tracker_collect_peers(&torrent, &peers) != 0) return 1;
+    if (tracker_collect_peers(&torrent, &peers, &peer_count) != 0) return 1;
+    if (peer_connect_all(&peers, peer_count) != 0) return 1;
+    if (peer_run_swarm(peers, peer_count, torrent.info_hash, torrent.peer_id) != 0) return 1;
 
 
-    // From here, network.c should take over
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed\n");
-        return 1;
-    }
-
-    // Bunch of winsock2 boilerplate that should be hidden in a wrapper
-    struct addrinfo hints;
-    ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = IPPROTO_UDP;
-
-    // This talks to all the trackers and collects the peers from them.
-    // This should be called from network.c
-    Peer *swarm = NULL;
-    int swarm_count = 0;
-    if (collect_peers(NULL, &hints, torrent.info_hash, torrent.peer_id, torrent.number_of_active_trackers, torrent.hosts, torrent.ports, &swarm, &swarm_count) != 0) {
-        printf("Failed to collect peers from trackers\n");
-        return 1;
-    }
-
-    // Winsock2 thingy
-    // I'm really not sure if this is the best way to do this, but it works for now. I might change this later.
-    WSAPOLLFD socket_poll_array[swarm_count];
-
-
-    // === Connect Sockets === //
-    for (int p = 0; p < swarm_count; p++) {
-        // Putting the brand new peer into this thing
-        socket_poll_array[p].fd = swarm[p].socket;
-        socket_poll_array[p].revents = 0;
-
-        connect(swarm[p].socket, (struct sockaddr*)&swarm[p].address, sizeof(swarm[p].address));
-        swarm[p].is_connecting = 1;
-        socket_poll_array[p].events = POLLOUT;
-    }
-
-    // End of network.c, should be handed over to peer.c
-
+    /*
     // === Talk to the peers === //
-    if (process_swarm(swarm, swarm_count, torrent.info_hash, torrent.peer_id) != 0) {
+    if (process_swarm(peers, peer_count, torrent.info_hash, torrent.peer_id) != 0) {
         printf("Error processing swarm\n");
     }
-
-/*
-    // This can stay here
-    // === Cleanup === //
-    cleanup_swarm(swarm, swarm_count);
-    free(swarm);
-    free_bencode(torrent_meta);
-    free(file_buffer);
-    for (int i = 0; i < accepted_count; i++) {
-        free(hosts[i]);
-        free(ports[i]);
-    }
-    free(hosts);
-    free(ports);
-    free(bitfield);
-    WSACleanup();
     */
+
     return 0;
 }

@@ -73,13 +73,6 @@ typedef struct {
     size_t bitfield_written;
 } Peer;
 
-int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], const uint8_t peer_id[20]);
-void cleanup_swarm(Peer *swarm, int swarm_count);
-void mark_peer_dead(Peer *peer);
-
-
-
-
 typedef enum {
     MSG_KEEPALIVE = -1,
     MSG_CHOKE = 0,
@@ -105,16 +98,18 @@ typedef struct {
 
 
 typedef enum {
+    PEER_ERROR,
+    PEER_DEAD,
     PEER_DISCONNECTED,
     PEER_CONNECTING,
     PEER_CONNECTED,
     PEER_HANDSHAKING,
-    PEER_ESTABLISHED,
-    PEER_ERROR
+    PEER_ESTABLISHED    
 } PeerState;
 
 typedef struct {
-    int fd;
+    SOCKET socket;
+    struct sockaddr_in address;
     PeerState state;
     uint8_t peer_id[20];
     uint8_t info_hash[20];
@@ -128,3 +123,9 @@ typedef struct {
     size_t rx_used;
     size_t rx_capacity;
 } PeerConnection;
+
+
+int peer_run_swarm(PeerConnection *swarm, int swarm_count, const uint8_t info_hash[20], const uint8_t peer_id[20]);
+void cleanup_swarm(PeerConnection *swarm, int swarm_count);
+void mark_peer_dead(PeerConnection *peer);
+int peer_connect_all(PeerConnection **peers, int peer_count);
