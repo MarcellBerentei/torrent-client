@@ -5,6 +5,8 @@
 #include <ws2tcpip.h>
 #include "peer.h"
 
+#define POLL_TIMEOUT 50
+
 static int send_handshake(PeerConnection *peer, const uint8_t info_hash[20], const uint8_t peer_id[20]) {
     HandshakeMessage handshake;
     handshake.pstrlen = 19;
@@ -140,6 +142,7 @@ static int process_peer_message(PeerConnection *peer) {
         return 1;
     }
 
+    // The whole message didn't arrive just yet
     if (peer->rx_used < total_bytes) {
         return 0;
     }
@@ -147,53 +150,60 @@ static int process_peer_message(PeerConnection *peer) {
     // Process the message based on its ID
     uint8_t message_id = buffer[4];
 
-    // If the ID is 5 (bitfield), we need to handle it specially
-    if (message_id == 5) {
-        uint32_t bitfield_length = length - 1; // Subtract 1 for the message ID byte
-        if (peer->bitfield == NULL) { // Allocate the bitfield buffer if it hasn't been allocated yet (What happens if the peer sends a new bitfield message?)
-            peer->bitfield = calloc(bitfield_length, 1);
-            if (peer->bitfield == NULL) {
-                printf("Peer | failed to allocate bitfield buffer\n");
-                mark_peer_dead(peer);
-                return -1;
-            }
-        }
+    switch (message_id) {
 
-        // Copy the bitfield data from the message buffer to the peer's bitfield
-        memcpy(peer->bitfield, &buffer[5], bitfield_length);
-        printf("Peer | full bitfield parsed (%u bytes)\n", bitfield_length);
-
-        // If the message buffer is larger than MAX_MESSAGE_BUFFER, we should shrink it back down to avoid excessive memory usage
-        if (peer->rx_capacity > MAX_MESSAGE_BUFFER) {
-            uint8_t *normal_buffer = realloc(peer->rx_buffer, MAX_MESSAGE_BUFFER);
-            if (normal_buffer != NULL) {
-                peer->rx_buffer = normal_buffer;
-                peer->rx_capacity = MAX_MESSAGE_BUFFER;
-            }
-        }
-
-        // After receiving the bitfield, we can send an "interested" message to the peer if we haven't already
-        if (peer->am_interested == 0) {
-            PeerMessage interested;
-            interested.length = htonl(1);
-            interested.message_id = 2;
-
-            int send_result = send(peer->socket, (char *)&interested, sizeof(interested), 0);
-            if (send_result == SOCKET_ERROR) {
-                printf("Peer | failed to send interested message: %d\n", WSAGetLastError());
-                mark_peer_dead(peer);
-                return -1;
+        case 5: // Bitfield
+            uint32_t bitfield_length = length - 1; // Subtract 1 for the message ID byte
+            if (peer->bitfield == NULL) { // Allocate the bitfield buffer if it hasn't been allocated yet (What happens if the peer sends a new bitfield message?)
+                peer->bitfield = calloc(bitfield_length, 1);
+                if (peer->bitfield == NULL) {
+                    printf("Peer | failed to allocate bitfield buffer\n");
+                    mark_peer_dead(peer);
+                    return -1;
+                }
             }
 
-            peer->am_interested = 1;
-            printf("Peer | sent interested message\n");
-        }
-    } else if (message_id == 1) { // Unchoke message
-        printf("Peer | received unchoke message\n");
-        peer->am_choked = 0;
-    } else { // Other message types
-        printf("Peer | received message id %u\n", message_id);
+            // Copy the bitfield data from the message buffer to the peer's bitfield
+            memcpy(peer->bitfield, &buffer[5], bitfield_length);
+            printf("Peer | full bitfield parsed (%u bytes)\n", bitfield_length);
+
+            // If the message buffer is larger than MAX_MESSAGE_BUFFER, we should shrink it back down to avoid excessive memory usage
+            if (peer->rx_capacity > MAX_MESSAGE_BUFFER) {
+                uint8_t *normal_buffer = realloc(peer->rx_buffer, MAX_MESSAGE_BUFFER);
+                if (normal_buffer != NULL) {
+                    peer->rx_buffer = normal_buffer;
+                    peer->rx_capacity = MAX_MESSAGE_BUFFER;
+                }
+            }
+
+            // After receiving the bitfield, we can send an "interested" message to the peer if we haven't already
+            if (peer->am_interested == 0) {
+                PeerMessage interested;
+                interested.length = htonl(1);
+                interested.message_id = 2;
+
+                int send_result = send(peer->socket, (char *)&interested, sizeof(interested), 0);
+                if (send_result == SOCKET_ERROR) {
+                    printf("Peer | failed to send interested message: %d\n", WSAGetLastError());
+                    mark_peer_dead(peer);
+                    return -1;
+                }
+
+                peer->am_interested = 1;
+                printf("Peer | sent interested message\n");
+            }
+            break;
+
+        case 1:
+            printf("Peer | received unchoke message\n");
+            peer->am_choked = 0;
+            break;
+
+        default:
+            printf("Peer | received message id %u\n", message_id);
+            break;
     }
+
 
     // Shift the remaining data in the message buffer to the front
     if (peer->rx_used > (int)total_bytes) {
@@ -272,12 +282,13 @@ int peer_run_swarm(PeerConnection *swarm, int swarm_count, const uint8_t info_ha
         for (int i = 0; i < swarm_count; i++) {
             // Skip dead peers
             PeerConnection *peer = &swarm[i];
-            if (peer->state == PEER_DEAD || peer->socket == INVALID_SOCKET) {
+            if (peer->state == PEER_DEAD) {
                 pollfds[i].events = 0;
                 continue;
             }
 
             active_connections++;
+            
             // If the peer is connecting, we want to check for writability (POLLOUT) to know when the connection is established.
             // Otherwise, we check for readability (POLLIN) to receive data.
             if (peer->state == PEER_CONNECTING) {
@@ -285,23 +296,19 @@ int peer_run_swarm(PeerConnection *swarm, int swarm_count, const uint8_t info_ha
             } else {
                 pollfds[i].events = POLLIN;
             }
+            
         }
-
-        if (active_connections == 0) {
-            break;
-        }
+        if (active_connections == 0) break;
 
         // Poll the sockets with a timeout of 100 milliseconds
-        int poll_result = WSAPoll(pollfds, swarm_count, 100);
+        int poll_result = WSAPoll(pollfds, swarm_count, POLL_TIMEOUT);
         if (poll_result == SOCKET_ERROR) {
             printf("WSAPoll failed with error: %d\n", WSAGetLastError());
             break;
         }
-
         // If no sockets are ready, continue to the next iteration
-        if (poll_result == 0) {
-            continue;
-        }
+        if (poll_result == 0) continue;
+
 
         // Process each peer based on the poll results
         for (int i = 0; i < swarm_count; i++) {

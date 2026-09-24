@@ -50,52 +50,6 @@ typedef struct {
 } PeerMessage;
 #pragma pack(pop)
 
-typedef struct {
-    struct sockaddr_in address;
-    uint8_t peer_id[20];
-    SOCKET socket;
-
-    int is_connected;
-    int is_connecting;
-    int is_dead;
-
-    int sent_handshake;
-    int sent_interested;
-
-    int handshake_complete;
-    int has_bitfield;
-    int is_chocking;
-
-    int bytes_received;
-    uint8_t *message_buffer;
-    size_t message_buffer_size;
-    uint8_t *bitfield;
-    size_t bitfield_written;
-} Peer;
-
-typedef enum {
-    MSG_KEEPALIVE = -1,
-    MSG_CHOKE = 0,
-    MSG_UNCHOKE = 1,
-    MSG_INTERESTED = 2,
-    MSG_NOT_INTERESTED = 3,
-    MSG_HAVE = 4,
-    MSG_BITFIELD = 5,
-    MSG_REQUEST = 6,
-    MSG_PIECE = 7,
-    MSG_CANCEL = 8,
-    MSG_PORT = 9
-} PeerMessageType;
-
-
-// ctx is short for context. It can be used to pass any additional information needed by the handler, such as a pointer to the Peer structure or any other relevant data.
-typedef int (*PeerMessageHandler)(void *ctx, const uint8_t *payload, size_t payload_length);
-
-typedef struct {
-    PeerMessageType type;
-    PeerMessageHandler handler;
-} PeerMessageHandlerEntry;
-
 
 typedef enum {
     PEER_ERROR,
