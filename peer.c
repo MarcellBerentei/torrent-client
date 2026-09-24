@@ -45,9 +45,7 @@ void cleanup_swarm(PeerConnection *swarm, int swarm_count) {
 
     for (int i = 0; i < swarm_count; i++) {
         PeerConnection *peer = &swarm[i];
-        if (peer->state <= PEER_DEAD && peer->socket != INVALID_SOCKET) {
-            closesocket(peer->socket);
-        }
+        
         free(peer->rx_buffer);
         free(peer->bitfield);
         peer->rx_buffer = NULL;
@@ -271,8 +269,6 @@ int peer_run_swarm(PeerConnection *swarm, int swarm_count, const uint8_t info_ha
     // Initialize the poll array with the swarm's sockets
     for (int i = 0; i < swarm_count; i++) {
         pollfds[i].fd = swarm[i].socket;
-        pollfds[i].revents = 0;
-        pollfds[i].events = POLLOUT;
     }
 
     // Main loop to process the swarm
