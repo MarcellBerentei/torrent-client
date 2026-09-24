@@ -56,3 +56,4 @@ void bitfield_set(uint8_t *bitfield, size_t bitfield_length, size_t bit_index) {
 
     bitfield[byte_index] |= (uint8_t)(1U << (7 - bit_offset));
 }
+

@@ -6,7 +6,7 @@
 int load_torrent_file(char *path, char **buffer, size_t *size);
 Bencode *parse_torrent_file(char *buffer);
 int compute_info_hash(Bencode *b, uint8_t hash_out[20]);
-size_t compute_bitfield_size(Bencode *b);
+size_t compute_bitfield_size(Bencode *b, long ***piece_map);
 
 typedef struct {
     uint8_t peer_id[20];
@@ -22,4 +22,4 @@ typedef struct {
     Bencode *torrent_meta;    
 } Torrent;
 
-int torrent_init(Torrent *torrent, char *torrent_path);
+int torrent_init(Torrent *torrent, char *torrent_path, long ***piece_map);

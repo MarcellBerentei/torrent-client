@@ -97,7 +97,7 @@ static uint64_t compute_total_size(Bencode *info_node) {
     return total;
 }
 
-size_t compute_bitfield_size(Bencode *b) {
+size_t compute_bitfield_size(Bencode *b, long ***piece_map) {
     if (b == NULL) {
         return 0;
     }
@@ -119,11 +119,13 @@ size_t compute_bitfield_size(Bencode *b) {
     }
 
     uint64_t total_pieces = (total_size + piece_length - 1) / piece_length;
+    *piece_map = calloc(total_pieces, sizeof(long*));
+
     return (size_t)((total_pieces + 7) / 8);
 }
 
 
-int torrent_init(Torrent *torrent, char *torrent_path) {
+int torrent_init(Torrent *torrent, char *torrent_path, long ***piece_map) {
     // Generating a unique peer ID for every session
     uint8_t peer_id[20];
     generate_peer_id(torrent->peer_id);
@@ -148,7 +150,7 @@ int torrent_init(Torrent *torrent, char *torrent_path) {
     }
 
     // Computing the size of the bitfield
-    torrent->bitfield_size = compute_bitfield_size(torrent->torrent_meta);
+    torrent->bitfield_size = compute_bitfield_size(torrent->torrent_meta, piece_map);
     torrent->bitfield = calloc(torrent->bitfield_size, 1);
     if (torrent->bitfield == NULL && torrent->bitfield_size > 0) {
         printf("Failed to allocate bitfield\n");

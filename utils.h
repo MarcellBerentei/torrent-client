@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#define AVAILABILITY_INDEX_STARTER_BUCKETS 1024
+#define AVAILABILITY_INDEX_STARTER_BUCKET_SIZE 32
+
 
 void generate_peer_id(uint8_t peer_id[20]);
 
