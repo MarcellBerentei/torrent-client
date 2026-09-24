@@ -11,6 +11,7 @@
 #include "sha1.h"
 #include "tracker.h"
 #include "peer.h"
+#include "torrent.h"
 
 typedef struct {
     uint64_t connection_id;
@@ -19,7 +20,7 @@ typedef struct {
     int is_resolved;
 } Tracker;
 
-int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[20], uint8_t peer_id[20], int accepted_count, char **hosts, char **ports, Peer **swarm, int *swarm_count) {
+int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[20], uint8_t peer_id[20], int accepted_count, char **hosts, char **ports, PeerConnection **swarm, int *swarm_count) {
     // Setting up UDP socket
     SOCKET TrackerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (TrackerSocket == INVALID_SOCKET) {
@@ -42,9 +43,6 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
         closesocket(TrackerSocket);
         return -1;
     }
-
-    *swarm = NULL;
-    *swarm_count = 0;  // Initialize peer count
 
 
     for (int i = 0; i < accepted_count; i++) {
@@ -198,7 +196,7 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
             }
 
             if (!is_duplicate) {
-                Peer *tmp = realloc(*swarm, (size_t)(*swarm_count + 1) * sizeof(Peer));
+                PeerConnection *tmp = realloc(*swarm, (size_t)(*swarm_count + 1) * sizeof(PeerConnection));
                 if (tmp == NULL) {
                     printf("Failed to allocate memory for peers\n");
                     break;
@@ -208,19 +206,15 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
                 (*swarm)[*swarm_count].address = peer_addr;
                 (*swarm)[*swarm_count].socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-                (*swarm)[*swarm_count].is_connected = 0;
-                (*swarm)[*swarm_count].is_connecting = 0;                
-                (*swarm)[*swarm_count].is_dead = 0;
+                (*swarm)[*swarm_count].am_interested = 0;
+                (*swarm)[*swarm_count].am_choked = 1;
+                (*swarm)[*swarm_count].peer_interested = 0;
+                (*swarm)[*swarm_count].peer_choked = 1;
 
-                (*swarm)[*swarm_count].sent_handshake = 0;
-                (*swarm)[*swarm_count].sent_interested = 0;
+                (*swarm)[*swarm_count].state = PEER_DISCONNECTED;
 
-                (*swarm)[*swarm_count].handshake_complete = 0;
-                (*swarm)[*swarm_count].has_bitfield = 0;
-                (*swarm)[*swarm_count].is_chocking = 1;
-
-                (*swarm)[*swarm_count].message_buffer = calloc(MAX_MESSAGE_BUFFER, sizeof(uint8_t));
-                (*swarm)[*swarm_count].message_buffer_size = MAX_MESSAGE_BUFFER;
+                (*swarm)[*swarm_count].rx_buffer = calloc(MAX_MESSAGE_BUFFER, sizeof(uint8_t));
+                (*swarm)[*swarm_count].rx_capacity = MAX_MESSAGE_BUFFER;
 
                 u_long nonblocking = 1;
                 ioctlsocket((*swarm)[*swarm_count].socket, FIONBIO, &nonblocking); // Set non-blocking mode
@@ -237,11 +231,35 @@ int collect_peers(struct addrinfo *result, struct addrinfo *hints, uint8_t hash[
             printf("  -> Total unique peers in swarm so far: %d\n\n", *swarm_count);
         }
 
-        Sleep(200);
+        Sleep(100);
     }
 
     closesocket(TrackerSocket);
     free(trackers);
+
+    return 0;
+}
+
+int tracker_collect_peers(Torrent *torrent, PeerConnection **peers, int *peer_count) {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
+
+    // Bunch of winsock2 boilerplate that should be hidden in a wrapper
+    struct addrinfo hints;
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    // This talks to all the trackers and collects the peers from them.
+    if (collect_peers(NULL, &hints, torrent->info_hash, torrent->peer_id, torrent->number_of_active_trackers, torrent->hosts, torrent->ports, peers, peer_count) != 0) {
+        printf("Failed to collect peers from trackers\n");
+        return 1;
+    }
+
 
     return 0;
 }

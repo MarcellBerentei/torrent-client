@@ -50,29 +50,36 @@ typedef struct {
 } PeerMessage;
 #pragma pack(pop)
 
+
+typedef enum {
+    PEER_ERROR,
+    PEER_DEAD,
+    PEER_DISCONNECTED,
+    PEER_CONNECTING,
+    PEER_CONNECTED,
+    PEER_HANDSHAKING,
+    PEER_ESTABLISHED    
+} PeerState;
+
 typedef struct {
-    struct sockaddr_in address;
-    uint8_t peer_id[20];
     SOCKET socket;
-
-    int is_connected;
-    int is_connecting;
-    int is_dead;
-
-    int sent_handshake;
-    int sent_interested;
-
-    int handshake_complete;
-    int has_bitfield;
-    int is_chocking;
-
-    int bytes_received;
-    uint8_t *message_buffer;
-    size_t message_buffer_size;
+    struct sockaddr_in address;
+    PeerState state;
+    uint8_t peer_id[20];
+    uint8_t info_hash[20];
     uint8_t *bitfield;
-    size_t bitfield_written;
-} Peer;
+    size_t bitfield_length;
+    int am_choked;
+    int am_interested;
+    int peer_choked;
+    int peer_interested;
+    uint8_t *rx_buffer;
+    size_t rx_used;
+    size_t rx_capacity;
+} PeerConnection;
 
-int process_swarm(Peer *swarm, int swarm_count, const uint8_t info_hash[20], const uint8_t peer_id[20]);
-void cleanup_swarm(Peer *swarm, int swarm_count);
-void mark_peer_dead(Peer *peer);
+
+int peer_run_swarm(PeerConnection *swarm, int swarm_count, const uint8_t info_hash[20], const uint8_t peer_id[20]);
+void cleanup_swarm(PeerConnection *swarm, int swarm_count);
+void mark_peer_dead(PeerConnection *peer);
+int peer_connect_all(PeerConnection **peers, int peer_count);
